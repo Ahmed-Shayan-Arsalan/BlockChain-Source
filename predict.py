@@ -2,10 +2,10 @@ import sys
 import pandas as pd
 import joblib
 import requests
-import os
 import warnings
-warnings.filterwarnings("ignore", category=UserWarning)
+import random
 
+warnings.filterwarnings("ignore", category=UserWarning)
 
 def download_from_ipfs(cid, output_path):
     url = f"https://gateway.pinata.cloud/ipfs/{cid}"
@@ -15,8 +15,6 @@ def download_from_ipfs(cid, output_path):
         f.write(response.content)
 
 if __name__ == "__main__":
-    # Arguments: datasetCID, modelCID, scalerCID
-    # Example: python predict.py <datasetCID> <modelCID> <scalerCID>
     if len(sys.argv) < 4:
         print("Usage: python predict.py <datasetCID> <modelCID> <scalerCID>")
         sys.exit(1)
@@ -25,33 +23,46 @@ if __name__ == "__main__":
     model_cid = sys.argv[2]
     scaler_cid = sys.argv[3]
 
-    try:
-        # Download dataset, model and scaler from IPFS
-        download_from_ipfs(dataset_cid, "dataset.csv")
-        download_from_ipfs(model_cid, "model.pkl")
-        download_from_ipfs(scaler_cid, "scaler.pkl")
+    # Download files
+    download_from_ipfs(dataset_cid, "dataset.csv")
+    download_from_ipfs(model_cid, "model.pkl")
+    download_from_ipfs(scaler_cid, "scaler.pkl")
 
-        # Load dataset
-        data = pd.read_csv("dataset.csv")
-        # For safety, ensure the dataset has at least 3 rows
-        data = data.head(3)
+    data = pd.read_csv("dataset.csv")
+    # If data is small, just re-sample from it, or generate random values
+    # Randomize input between 1 and 10000:
+    # Ensure the columns exist in dataset, else adapt accordingly.
+    if len(data) < 3:
+        # If dataset too small, generate random rows
+        rows = []
+        for _ in range(3):
+            row = {
+                'Hours Studied': random.randint(1, 10000),
+                'Previous Scores': random.randint(1, 10000),
+                'Extracurricular Activities': random.randint(1, 10000),
+                'Sleep Hours': random.randint(1, 10000),
+                'Sample Question Papers Practiced': random.randint(1, 10000)
+            }
+            rows.append(row)
+        data = pd.DataFrame(rows)
+    else:
+        # Randomly sample 3 rows from dataset
+        data = data.sample(n=3, replace=True)
 
-        scaler = joblib.load("scaler.pkl")
-        model = joblib.load("model.pkl")
+        # Optionally modify the sampled rows to have random values 1-10000
+        # to match the user's requirement more literally:
+        data['Hours Studied'] = [random.randint(1, 10000) for _ in range(3)]
+        data['Previous Scores'] = [random.randint(1, 10000) for _ in range(3)]
+        data['Extracurricular Activities'] = [random.randint(1, 10000) for _ in range(3)]
+        data['Sleep Hours'] = [random.randint(1, 10000) for _ in range(3)]
+        data['Sample Question Papers Practiced'] = [random.randint(1, 10000) for _ in range(3)]
 
-        # Prepare input features
-        X = data[['Hours Studied', 'Previous Scores', 'Extracurricular Activities', 'Sleep Hours', 'Sample Question Papers Practiced']]
+    scaler = joblib.load("scaler.pkl")
+    model = joblib.load("model.pkl")
 
-        # Normalize features
-        X_normalized = scaler.transform(X)
+    X = data[['Hours Studied', 'Previous Scores', 'Extracurricular Activities', 'Sleep Hours', 'Sample Question Papers Practiced']]
+    X_normalized = scaler.transform(X)
+    predictions = model.predict(X_normalized)
 
-        # Make predictions
-        predictions = model.predict(X_normalized)
-
-        # Output only the 3 predictions
-        for p in predictions:
-            print(f"{p:.6f}")
-
-    except Exception as e:
-        print("Error occurred:", e)
-        sys.exit(1)
+    for p in predictions:
+        print(f"{p:.6f}")
